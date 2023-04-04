@@ -13,3 +13,5 @@ Opis plików:
 - główna metoda w programie to run_experiments z klasy MachineLearning, która wywołuje wszystko co potrzeba
 - plik config.yaml służy do ustawienia jakie dane chcemy (czy losowe czy realne z pliku) oraz jakie algorytmy włączyć (RF działa, SVM działa, udoskonalenie implementacji na kolejnym etapie (etapie 5)
 
+*warto dodać, że niektóre pliki są już stworzone już pod następne etapy projektu
+
