@@ -1,9 +1,10 @@
-use_real_data: false #true - używa danych realnych, false - używa danych syntetycznych.
+# Plik konfiguracyjny.
+
+use_real_data: false # true - używa danych realnych, false - używa danych syntetycznych,
+alpha: 0.05 # do testu T studenta.
 
 enabled_algorithsm:
     support_vector_machines: true
-    one_vs_one: false
-    one_vs_rest: false
+    one_vs_one: true
+    one_vs_rest: true
     random_forest: true
-
-show_plots: false
