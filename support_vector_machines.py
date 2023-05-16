@@ -3,109 +3,139 @@ from sklearn.base import ClassifierMixin
 import numpy as np
 import math
 
+class Hyperlane:
+
+    def __init__(self):
+
+        self.w = 0
+        self.b = 0
+
+"""
+Klasa SupportVectorMachines służy do przeprowadzenia uczenia maszynowego za pomocą metody fit oraz klasyfikacji za pomocą metody predict.
+"""
 class SupportVectorMachines(BaseEstimator, ClassifierMixin):
 
-    def __init__(self, iterations = 300, random_state = 0, optimization_factor = 0.1):
-        
-        self.opt_factor = optimization_factor
-        self.iter = iterations
-        self.hyperplanes = []
-        self.rs = random_state
-        if self.rs == 0:
-            self.rs = int(np.random.random() * 10000)
+    """
+    Konstruktor klasy tworzy listę na przechowywanie hiperpłaszczyzn potrzebnych w SVMie (dla 2 cech są to linie proste).
+    """
+    def __init__(self):
 
-    def fit(self, x_train, y_train):
+        self.hyperlanes = []
 
-        self.n_classes = len(set(y_train))
+    """
+    Metoda fit służy do przeprowadzenia uczenia - dostosowania klasyfikatora do danych uczących.
 
+    Paramaetry:
+    - x_train - wektor cech ciągu uczącego,
+    - y_train - poprawne wyniki klasyfikacji ciągu uczącego,
+    - batch_size - ilość danych brana "naraz" (domyślnie 100),
+    - learning_rate - stała ograniczająca zmiany generowanych prostych (domyślnie 0.0001),
+    - epochs - ilość iteracji algorytmu (domyślnie 100).
+
+    Zwraca: self - wyuczony obiekt klasyfikatora.
+    """
+    def fit(self, x_train, y_train, batch_size=100, learning_rate=0.0001, epochs=100):
+
+        # Zbieramy informację o ilości cech, klas oraz obiektów do nauki:
+        n_features = x_train.shape[1]
+        self.n_classes = np.max(y_train) + 1
+        number_of_samples = x_train.shape[0]
+
+        # Dla każdej klasy tworzymy osobną hiperpłaszczyznę:
         for i in range(self.n_classes):
-            
-            good_x = []
-            bad_x = []
-            for j in range(len(y_train)):
-                if y_train[j] == i:
-                    good_x.append(x_train[j])
-                else:
-                    bad_x.append(x_train[j])
 
-            self.hyperplanes.append(self.get_hyperplane(np.array(good_x), np.array(bad_x)))
+            hyperlane = Hyperlane()
+
+            # Dzielimy zbiór poprawnych odpowiedzi na te z obrabianej obecnie klasy (wartość 1) oraz wszystkich innych klas (wartość -1).
+            # Inne klasy muszą mieć wartość przeciwną, aby znajdować się po drugiej stronie hiperpłaszczyzny:
+            divided_Y = np.copy(y_train)
+            for j in range(len(divided_Y)):
+                if divided_Y[j] == i:
+                    divided_Y[j] = 1
+                else:
+                    divided_Y[j] = -1
+
+            # Tworzymy listę numerów obiektów do klasyfikacji:
+            ids = np.arange(number_of_samples)
+
+            # Tworzymy początkowe (zerowe) dane hiperpłaszczyzny - wektor normalny i bias:
+            w = np.zeros((1, n_features))
+            b = 0
+
+            # Dla każdej epoki poprawiamy odpowiednio dane płaszczyzny:
+            for i in range(epochs):
+
+                # Wykonujemy poprawkę gradientów kilka razy:
+                for batch_initial in range(0, number_of_samples, batch_size):
+                    gradw = 0
+                    gradb = 0
+
+                    # Na tym etapie najważniejsze jest aby wyliczyć ti:
+                    for j in range(batch_initial, batch_initial + batch_size):
+                        if j < number_of_samples:
+                            x = ids[j]
+                            ti = divided_Y[x] * (np.dot(w, x_train[x].T) + b)
+
+                            # Jeśli ti jest większe niż 1, nie zmieniamy gradintów:
+                            if ti > 1:
+                                gradw += 0
+                                gradb += 0
+                            else:
+
+                                # Gdy ti jest mniejsze lub równe 1, wyliczamy poprawki gradientów:
+                                gradw += divided_Y[x] * x_train[x]
+                                gradb += divided_Y[x]
+
+                    # Po poprawkach gradientów dodajemy je do danych hiperpłaszczyzny (uwzględniając learning_rate):
+                    w = w - learning_rate * w + learning_rate * gradw
+                    b = b + learning_rate * gradb
+
+            # Wpisujemy dane do obiektu hiperpłaszczyzny oraz dodajemy hiperpłaszczyznę do listy hiperpłaszczyzn:
+            hyperlane.w = w
+            hyperlane.b = b
+
+            self.hyperlanes.append(hyperlane)
 
         return self
-    
+
+    """
+    Metoda predict służy do przeprowadzenia klasyfikacji na zadanym wektorze cech.
+
+    Parametry:
+    - x_test - wektor cech.
+
+    Zwraca: y_pred - wyniki klasyfikacji wyliczone przez algorytm.
+    """
     def predict(self, x_test):
 
-        test_items_number = len(x_test)
+        y_pred = []
 
-        y_predicted = [self.n_classes - 1] * test_items_number
+        # Dla kazdego obiektu z ciągu testowego spradzamy, dla której klasy ma najwięcej punktów. Tą klasę wybieramy.
+        for item in x_test:
 
-        for i in range(test_items_number):
+            class_points = []
+            for hyperplane in self.hyperlanes:
+                # Przeprowadzamy równanie wektora normalnego: w * x + b.
+                # Jest to po prostu iloczyn skalarny wektora normalnego hiperpłaszczyzny z wektorem cech danego testowanego obiektu plus bias:
+                points = np.dot(item, hyperplane.w[0]) + hyperplane.b
+                class_points.append(points)
 
-            for j in range(len(self.hyperplanes) - 1):
-                if self.is_x_under_hyperlane(x_test[i], self.hyperplanes[j]):
-                    y_predicted[i] = j
-                    break
+            item_class = np.argmax(class_points)
+            y_pred.append(item_class)
 
-        return y_predicted
-    
-    def get_hyperplane(self, good_x, bad_x) -> list:
+        return y_pred
 
-        line_parameters = good_x.shape[1]
-        hyperlane = [0] * (line_parameters)
-        good_mean = np.mean(good_x, axis = 0)
-        bad_mean = np.mean(bad_x, axis = 0)
+    """
+    Metoda get_hyperplane_value służy do wyznaczenia punktów danej hiperpłaszczyzny (w wypadku 2 cech - prostej).
+    Celem jest potem narysowanie tej prostej na wykresie.
 
-        for i in range(line_parameters):
-            hyperlane[i] = np.mean([good_mean[i], bad_mean[i]])
+    Parametry:
+    - x - punkt początkowy, dla którego wyliczana jest prosta,
+    - plane_num - numer prostej (numer klasy).
 
-        for _ in range(self.iter):
+    Zwraca: Punkt końcowy prostej.
+    """
+    def get_hyperplane_value(self, x, plane_num: int):
 
-            new_hyperlane = hyperlane
-            np.random.seed(self.rs)
-
-            index_to_change = int(np.random.random() * 10000) % len(new_hyperlane)
-            change_factor = (np.random.random() -0.5) * self.opt_factor
-            new_hyperlane[index_to_change] += change_factor
-
-            if self.is_new_hyperlane_better(hyperlane, new_hyperlane, good_x, bad_x):
-                hyperlane = new_hyperlane
-
-        print(hyperlane)
-        return hyperlane
-
-    def distance_from_point_to_hyperlane(self, x_point: list, hyperlane: list) -> float:
-
-        # Z definicji odległości punktu od płaszczyzny:
-        numerator = abs(np.dot(x_point, hyperlane))
-        denominator = math.sqrt(np.sum(hyperlane**2))
-
-        return numerator / denominator
-    
-    def get_min_distance(self, data_x, hyperlane: list) -> float:
-
-        min_distance = 99999
-        for data in data_x:
-
-            tested_distance = self.distance_from_point_to_hyperlane(data, np.array(hyperlane))
-            if tested_distance < min_distance:
-                min_distance = tested_distance
-
-        return min_distance
-    
-    def is_new_hyperlane_better(self, old_hyperlane, new_hyperlane, good_x, bad_x) -> bool:
-
-        old_distance_from_good = self.get_min_distance(good_x, old_hyperlane)
-        old_distance_from_bad = self.get_min_distance(bad_x, old_hyperlane)
-
-        new_distance_from_good = self.get_min_distance(good_x, new_hyperlane)
-        new_distance_from_bad = self.get_min_distance(bad_x, new_hyperlane)
-
-        return new_distance_from_good > old_distance_from_good and new_distance_from_bad > old_distance_from_bad
-    
-    def is_x_under_hyperlane(self, x: list, hyperlane: list) -> bool:
-
-        for i in range(len(x)):
-
-            if x[i] < hyperlane[i]:
-                return False
-            
-        return True
+        margin = 1
+        return (-1* self.hyperlanes[plane_num].w[0][0] * x + self.hyperlanes[plane_num].b + margin) / self.hyperlanes[plane_num].w[0][1]
